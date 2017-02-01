@@ -9,6 +9,7 @@ SUBDIRS = \
 	freertos.armv7m.ti-launchpad-lm4f120xl \
 	freertos.armv7m.ti-launchpad-tm4c129 \
 	freertos.armv7m.ti-launchpad-cc3200 \
+	freertos.armv7em.stm32f746zg \
 	freertos.mips4k.pic32mx.duinomitemega \
 	freertos.mips4k.pic32mx.lccbuffer \
 

@@ -87,9 +87,41 @@
  *----------------------------------------------------------*/
 
 /* ***************************************************************************
+ * Cortex-M7 specific defines
+ *************************************************************************** */
+#if defined(GCC_ARMCM7)
+
+#define configCPU_CLOCK_HZ             ( cm7_cpu_clock_hz )
+#define configMINIMAL_STACK_SIZE       ( ( unsigned short ) 256 )
+#define configTOTAL_HEAP_SIZE          ( ( size_t ) ( 15360 ) )
+#define configTIMER_TASK_STACK_DEPTH   256
+
+#define configKERNEL_INTERRUPT_PRIORITY         255
+/* !!!! configMAX_SYSCALL_INTERRUPT_PRIORITY must not be set to zero !!!!
+See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY     191 /* equivalent to 0xa0, or priority 5. */
+
+// Assertion facility
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern const unsigned long cm7_cpu_clock_hz;
+extern void diewith(unsigned long);
+extern unsigned long blinker_pattern;
+#ifdef __cplusplus
+}
+#endif  // cplusplus
+
+/* Definitions that map the FreeRTOS port interrupt handlers to their CMSIS
+standard names - or at least those used in the unmodified vector table. */
+#define vPortSVCHandler SVC_Handler
+#define xPortPendSVHandler PendSV_Handler
+#define xPortSysTickHandler SysTick_Handler
+
+/* ***************************************************************************
  * Cortex-M3 specific defines
  *************************************************************************** */
-#if defined(GCC_ARMCM3)
+#elif defined(GCC_ARMCM3)
 
 #define configCPU_CLOCK_HZ             ( cm3_cpu_clock_hz )
 #define configMINIMAL_STACK_SIZE       ( ( unsigned short ) 256 )

@@ -39,6 +39,8 @@
 #include "stm32f1xx_hal_cortex.h"
 #elif defined(STM32F303xC)
 #include "stm32f3xx_hal_cortex.h"
+#elif defined(STM32F746xx)
+#include "stm32f7xx_hal_cortex.h"
 #else
 #error Dont know what STM32 chip you have.
 #endif
@@ -59,6 +61,12 @@ Stm32Uart *Stm32Uart::instances[5] = {NULL};
 Stm32Uart *Stm32Uart::instances[6] = {NULL};
 #elif defined (STM32F091xC) || defined (STM32F098xx)
 Stm32Uart *Stm32Uart::instances[8] = {NULL};
+#elif defined(STM32F746xx)
+Stm32Uart *Stm32Uart::instances[8] = {NULL};
+#define USART4 UART4
+#define USART5 UART5
+#define USART7 UART7
+#define USART8 UART8
 #endif
 
 /** Constructor.

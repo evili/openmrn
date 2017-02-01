@@ -35,6 +35,13 @@ SUBDIRS += mbed_lpc1768 drivers_lpc1768 tivaware lpc_chip_175x_6x \
 CXXSRCS += c++_operators.cxx
 endif
 
+ifeq ($(TARGET),freertos.armv7em)
+SUBDIRS += stm32cubef74xx \
+           net_freertos_tcp freertos_tcp
+# Avoids exception handling from operator new.
+CXXSRCS += c++_operators.cxx
+endif
+
 ifeq ($(TARGET),bare.armv7m)
 SUBDIRS += cc32xxsdk
 endif

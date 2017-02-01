@@ -61,6 +61,16 @@
 #define CAN_SECOND_IRQN USB_LP_CAN_RX0_IRQn
 #define CAN_CLOCK (cm3_cpu_clock_hz >> 1)
 
+#elif defined (STM32F746xx)
+
+#include "stm32f7xx_hal.h"
+#define SPLIT_INT
+#define CAN_TX_IRQN CAN1_TX_IRQn
+#define CAN_IRQN CAN1_TX_IRQn
+#define CAN_SECOND_IRQN CAN1_RX0_IRQn
+#define CAN_CLOCK (cm7_cpu_clock_hz >> 1)
+#define CAN CAN1
+
 #else
 #error Dont know what STM32 chip you have.
 #endif
@@ -414,6 +424,23 @@ void usb_hp_can1_tx_interrupt_handler(void)
 void usb_lp_can1_rx0_interrupt_handler(void)
 {
     Stm32Can::instances[0]->rx_interrupt_handler();
+}
+
+#elif defined(STM32F746xx)
+
+void HAL_CAN_TxCpltCallback(CAN_HandleTypeDef* hcan)
+{
+        Stm32Can::instances[0]->tx_interrupt_handler();
+}
+
+void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef* hcan)
+{
+        Stm32Can::instances[0]->rx_interrupt_handler();
+}
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
+{
+        // TODO: Implement Stm32Can::err_interrupt_handler()
+        Stm32Can::instances[0]->rx_interrupt_handler();
 }
 
 #else

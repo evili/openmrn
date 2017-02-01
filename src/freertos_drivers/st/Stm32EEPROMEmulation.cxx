@@ -44,6 +44,8 @@
 #include "stm32f0xx_hal_flash.h"
 #elif defined(STM32F303xC)
 #include "stm32f3xx_hal_flash.h"
+#elif defined(STM32F746xx)
+#include "stm32f7xx_hal_flash.h"
 #else
 #error "stm32EEPROMEmulation unsupported STM32 device"
 #endif
@@ -57,6 +59,8 @@ const size_t Stm32EEPROMEmulation::PAGE_SIZE = 0x400;
    || defined (STM32F091xC) || defined (STM32F098xx) \
    || defined (STM32F303xC)
 const size_t Stm32EEPROMEmulation::PAGE_SIZE = 0x800;
+#elif defined(STM32F746xx)
+const size_t Stm32EEPROMEmulation::PAGE_SIZE = 0x8000;
 #endif
 const size_t EEPROMEmulation::BLOCK_SIZE = 4;
 const size_t EEPROMEmulation::BYTES_PER_BLOCK = 2;
@@ -98,21 +102,38 @@ void Stm32EEPROMEmulation::flash_erase(unsigned sector)
     
     uint32_t page_error;
     FLASH_EraseInitTypeDef erase_init;
+    #if !defined(STM32F746xx)
     erase_init.TypeErase = TYPEERASE_PAGES;
     erase_init.PageAddress = (uint32_t)address;
     erase_init.NbPages = SECTOR_SIZE / PAGE_SIZE;
-
+    #else
+    // In STM32F7xx the 'Pages' are now called 'Sectors',
+    // and at the end SECTOR_SIZE = PAGE_SIZE = 32K
+    erase_init.TypeErase = FLASH_TYPEERASE_SECTORS;
+    erase_init.Sector = (uint32_t)address;
+    erase_init.NbSectors = SECTOR_SIZE / PAGE_SIZE;
+    #endif
     portENTER_CRITICAL();
     HAL_FLASH_Unlock();
     // We erase the first page at the end, because the magic bytes are
     // there. This is to make corruption less likely in case of a power
     // interruption happens.
     if (SECTOR_SIZE > PAGE_SIZE) {
+        #if !defined(STM32F746xx)
         erase_init.PageAddress += PAGE_SIZE;
         erase_init.NbPages--;
+        #else
+        erase_init.Sector += PAGE_SIZE;
+        erase_init.NbSectors--;
+        #endif
         HAL_FLASHEx_Erase(&erase_init, &page_error);
+        #if !defined(STM32F746xx)
         erase_init.NbPages = 1;
         erase_init.PageAddress = (uint32_t)address;
+        #else
+        erase_init.NbSectors = 1;
+        erase_init.Sector = (uint32_t)address;
+        #endif
     }
     HAL_FLASHEx_Erase(&erase_init, &page_error);
     HAL_FLASH_Lock();
