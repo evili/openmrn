@@ -46,6 +46,7 @@
 #elif defined(STM32F303xC)
 #include "stm32f3xx_hal_gpio.h"
 #elif defined(STM32F746xx)
+#include "stm32f7xx_hal.h"
 #include "stm32f7xx_hal_gpio.h"
 #else
 #error Dont know what STM32 chip you have.
