@@ -1,0 +1,14 @@
+VPATH := $(FREERTOSPATH)/Source: \
+         $(FREERTOSPATH)/Source/portable/GCC/ARM_CM7/r0p1: \
+         $(FREERTOSPATH)/Source/portable/MemMang/
+         
+CSRCS += croutine.c \
+         list.c \
+         queue.c \
+         tasks.c \
+         timers.c \
+         port.c \
+         heap_4.c \
+         event_groups.c
+
+CXXSRCS +=
