@@ -63,7 +63,7 @@ const char *STDERR_DEVICE = "/dev/ser0";
 // this driver causes us to crash in default_interrupt_handler. Check that the
 // appropriate weak definition / implementation is used.
 
-//static Stm32Uart uart0("/dev/ser0", USART1, USART1_IRQn);
+static Stm32Uart uart0("/dev/ser0", USART3, USART3_IRQn);
 
 /** CAN 0 CAN driver instance */
 static Stm32Can can0("/dev/can0");
