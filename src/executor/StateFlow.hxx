@@ -44,6 +44,7 @@
 #include "executor/Timer.hxx"
 #include "utils/Buffer.hxx"
 #include "utils/Queue.hxx"
+#include "utils/LinkedObject.hxx"
 
 /// Turns a function name into an argument to be supplied to functions
 /// expecting a state. Usage:
@@ -199,6 +200,7 @@ protected:
     StateFlowBase(Service *service)
         : service_(service)
         , state_(STATE(terminated))
+        , allocationResult_(nullptr)
     {
     }
 
@@ -427,6 +429,17 @@ protected:
     Action yield_and_call(Callback c)
     {
         state_ = c;
+        notify();
+        return wait();
+    }
+
+    /** Place the current flow to the back of the executor, and re-try the
+     * current state after we get the CPU again.  Similar to @ref again, except
+     * we place this flow on the back of the Executor queue.
+     * @return function pointer to be returned from state function
+     */
+    Action yield()
+    {
         notify();
         return wait();
     }
@@ -727,6 +740,25 @@ protected:
         service()->executor()->select(helper);
         return wait_and_call(c);
     }
+
+    /** Wait for a connect socket to become active.
+     * @param helper selectable helper for maintaining the select metadata
+     * @param fd file descriptor of a non-blocking connect socket
+     * @param c next state
+     */
+    Action connect_and_call(StateFlowSelectHelper *helper, int fd, Callback c)
+    {
+        // verify that the fd is a socket
+        struct stat stat;
+        fstat(fd, &stat);
+        HASSERT(S_ISSOCK(stat.st_mode));
+
+        helper->reset(Selectable::WRITE, fd, Selectable::MAX_PRIO);
+        helper->set_wakeup(this);
+
+        service()->executor()->select(helper);
+        return wait_and_call(c);
+    }
 #endif
 
     /// Writes some data into a file descriptor, repeating the operation as
@@ -899,7 +931,6 @@ private:
      * the newly allocated payload object. */
     void alloc_result(QMember *b) override
     {
-        LOG(VERBOSE, "allocation result arrived.");
         allocationResult_ = b;
         notify();
     }
@@ -921,7 +952,7 @@ template <class T, class S> class StateFlow;
 
 /** A state flow that has an incoming message queue, pends on that queue, and
  * runs a flow for every message that comes in from that queue. */
-class StateFlowWithQueue : public StateFlowBase, protected Atomic
+class StateFlowWithQueue : public StateFlowBase, protected Atomic, public LinkedObject<StateFlowWithQueue>
 {
 public:
     ~StateFlowWithQueue();
@@ -1040,12 +1071,6 @@ protected:
 private:
     STATE_FLOW_STATE(wait_for_message);
 
-    /// Next flow (global linkage of all state flows).
-    StateFlowWithQueue* link_;
-    /// Head of static linked list.
-    static StateFlowWithQueue* head_;
-    /// Mutex protecting the state flow linked lists.
-    static Atomic headMu_;
     /// For debugging: how many entries are currently waiting in the queue of
     /// this stateflow.
     unsigned queueSize_;
@@ -1262,7 +1287,7 @@ public:
 
     /** Destructor.
      */
-    ~TypedStateFlow()
+    virtual ~TypedStateFlow()
     {
     }
 

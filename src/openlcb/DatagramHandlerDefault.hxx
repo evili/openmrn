@@ -32,8 +32,8 @@
  * @date 11 Feb 2014
  */
 
-#ifndef _NMRANET_DATAGRAMHANDLERDEFAULT_HXX_
-#define _NMRANET_DATAGRAMHANDLERDEFAULT_HXX_
+#ifndef _OPENLCB_DATAGRAMHANDLERDEFAULT_HXX_
+#define _OPENLCB_DATAGRAMHANDLERDEFAULT_HXX_
 
 #include "openlcb/Datagram.hxx"
 
@@ -52,11 +52,13 @@ protected:
     {
     }
 
+public:
     DatagramService *dg_service()
     {
         return static_cast<DatagramService *>(service());
     }
 
+protected:
     /** Sends a DATAGRAM_OK response to the datagram originator node. Call this
      * from the user handler. The flow will end up in the ok_response_sent()
      * state.
@@ -140,4 +142,4 @@ private:
 
 } // namespace
 
-#endif // _NMRANET_DATAGRAMHANDLERDEFAULT_HXX_
+#endif // _OPENLCB_DATAGRAMHANDLERDEFAULT_HXX_

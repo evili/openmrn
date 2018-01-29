@@ -207,9 +207,9 @@ OS_INLINE int os_thread_once(os_thread_once_t *once, void (*routine)(void))
 #define OS_MQ_FULL     3 /**< error code for queue being full */
 
 #if defined LLONG_MAX
-#define OS_WAIT_FOREVER LLONG_MAX /**< maximum timeout period */
+#define OPENMRN_OS_WAIT_FOREVER LLONG_MAX /**< maximum timeout period */
 #else
-#define OS_WAIT_FOREVER __LONG_LONG_MAX__ /**< maximum timeout period */
+#define OPENMRN_OS_WAIT_FOREVER __LONG_LONG_MAX__ /**< maximum timeout period */
 #endif
 
 /** Convert a nanosecond value to a microsecond value.
@@ -229,6 +229,12 @@ OS_INLINE int os_thread_once(os_thread_once_t *once, void (*routine)(void))
  * @return second value
  */
 #define NSEC_TO_SEC(_nsec) (((long long)_nsec) / 1000000000LL)
+
+/** Convert a nanosecond value to minutes.
+ * @param _nsec nanosecond value to convert
+ * @return minutes value
+ */
+#define NSEC_TO_MIN(_nsec) (((long long)_nsec) / 60000000000LL)
 
 /** Convert a microsecond value to a nanosecond value.
  * @param _usec microsecond value to convert
@@ -621,12 +627,12 @@ OS_INLINE int os_sem_wait(os_sem_t *sem)
 #ifndef ESP_NONOS
 /** Wait on a semaphore with a timeout.
  * @param sem address of semaphore to decrement
- * @param timeout in nanoseconds, else OS_WAIT_FOREVER to wait forever
+ * @param timeout in nanoseconds, else OPENMRN_OS_WAIT_FOREVER to wait forever
  * @return 0 upon success, else -1 with errno set to indicate error
  */
 OS_INLINE int os_sem_timedwait(os_sem_t *sem, long long timeout)
 {
-    if (timeout == OS_WAIT_FOREVER)
+    if (timeout == OPENMRN_OS_WAIT_FOREVER)
     {
         return os_sem_wait(sem);
     }

@@ -32,8 +32,8 @@
  * @date 23 Feb 2014
  */
 
-#ifndef _NMRANET_MEMORYCONFIG_HXX_
-#define _NMRANET_MEMORYCONFIG_HXX_
+#ifndef _OPENLCB_MEMORYCONFIG_HXX_
+#define _OPENLCB_MEMORYCONFIG_HXX_
 
 #include "openlcb/DatagramDefs.hxx"
 #include "openlcb/DatagramHandlerDefault.hxx"
@@ -173,6 +173,26 @@ struct MemoryConfigDefs {
         return p;
     }
 
+    static DatagramPayload read_datagram(
+        uint8_t space, uint32_t offset, uint8_t length)
+    {
+        DatagramPayload p;
+        p.reserve(7);
+        p.push_back(DatagramDefs::CONFIGURATION);
+        p.push_back(COMMAND_READ);
+        p.push_back(0xff & (offset >> 24));
+        p.push_back(0xff & (offset >> 16));
+        p.push_back(0xff & (offset >> 8));
+        p.push_back(0xff & (offset));
+        if (is_special_space(space)) {
+            p[1] |= space & ~SPACE_SPECIAL;
+        } else {
+            p.push_back(space);
+        }
+        p.push_back(length);
+        return p;
+    }
+    
 private:
     /** Do not instantiate this class. */
     MemoryConfigDefs();
@@ -484,6 +504,48 @@ public:
         return &registry_;
     }
 
+    /// Overrides the default send method in orderto decide whether the queue
+    /// the incoming datagram in the server queue or the client queue.
+    void send(DefaultDatagramHandler::message_type *message, unsigned priority = UINT_MAX) override
+    {
+        size_t len = message->data()->payload.size();
+        const uint8_t *bytes = (const uint8_t *)message->data()->payload.data();
+        uint8_t cmd = ((len >= 2) && (client_ != nullptr)) ? bytes[1] : 0;
+        switch (cmd)
+        {
+            case MemoryConfigDefs::COMMAND_WRITE_REPLY:
+            case MemoryConfigDefs::COMMAND_WRITE_FAILED:
+            case MemoryConfigDefs::COMMAND_WRITE_STREAM_REPLY:
+            case MemoryConfigDefs::COMMAND_WRITE_STREAM_FAILED:
+            case MemoryConfigDefs::COMMAND_READ_REPLY:
+            case MemoryConfigDefs::COMMAND_READ_FAILED:
+            case MemoryConfigDefs::COMMAND_OPTIONS_REPLY:
+            case MemoryConfigDefs::COMMAND_INFORMATION_REPLY:
+            case MemoryConfigDefs::COMMAND_LOCK_REPLY:
+            case MemoryConfigDefs::COMMAND_UNIQUE_ID_REPLY:
+            {
+                client_->send(message, priority);
+                return;
+            }
+            default:
+                break;
+        }
+        DatagramHandlerFlow::send(message, priority);
+    }
+
+    /// Registers a second handler to forward all the client interactions,
+    /// i.e. everythingthat comes back with the RESPONSE bit set.
+    void set_client(DatagramHandlerFlow* client) {
+        HASSERT(client_ == nullptr || client_ == client);
+        client_ = client;
+    }
+
+    /// Unregisters the previously registered second handler.
+    void clear_client(DatagramHandlerFlow* client) {
+        HASSERT(client_ == client);
+        client_ = nullptr;
+    }
+    
 private:
     typedef MemorySpace::address_t address_t;
     typedef MemorySpace::errorcode_t errorcode_t;
@@ -562,6 +624,23 @@ private:
             {
                 return call_immediately(STATE(handle_get_space_info));
             }
+            case MemoryConfigDefs::COMMAND_WRITE_REPLY:
+            case MemoryConfigDefs::COMMAND_WRITE_FAILED:
+            case MemoryConfigDefs::COMMAND_WRITE_STREAM_REPLY:
+            case MemoryConfigDefs::COMMAND_WRITE_STREAM_FAILED:
+            case MemoryConfigDefs::COMMAND_READ_REPLY:
+            case MemoryConfigDefs::COMMAND_READ_FAILED:
+            case MemoryConfigDefs::COMMAND_OPTIONS_REPLY:
+            case MemoryConfigDefs::COMMAND_INFORMATION_REPLY:
+            case MemoryConfigDefs::COMMAND_LOCK_REPLY:
+            case MemoryConfigDefs::COMMAND_UNIQUE_ID_REPLY:
+            {
+                if (client_)
+                {
+                    client_->send(transfer_message());
+                    return exit();
+                }
+            } // fall through to unsupported.
             default:
                 // Unknown/unsupported command, reject datagram.
                 return respond_reject(Defs::ERROR_UNIMPLEMENTED_SUBCMD);
@@ -643,9 +722,9 @@ private:
         response_.push_back(available_commands >> 8);
         response_.push_back(available_commands & 0xff);
         // Write lengths
-        response_.push_back(
+        response_.push_back(static_cast<char> (
             MemoryConfigDefs::LENGTH_1 | MemoryConfigDefs::LENGTH_2 |
-            MemoryConfigDefs::LENGTH_4 | MemoryConfigDefs::LENGTH_ARBITRARY);
+            MemoryConfigDefs::LENGTH_4 | MemoryConfigDefs::LENGTH_ARBITRARY));
 
         uint8_t min_space = 0xFF;
         uint8_t max_space = 0;
@@ -1036,6 +1115,9 @@ private:
     //NodeID lockNode_; //< Holds the node ID that locked us.
 
     Registry registry_;         //< holds the known memory spaces
+    /// If there is a memory config client, we will forward response traffic to
+    /// it.
+    DatagramHandlerFlow* client_{nullptr};
 
     /** Offset withing the current write/read datagram. This does not include
      * the offset from the incoming datagram. */
@@ -1044,4 +1126,4 @@ private:
 
 } // namespace openlcb
 
-#endif // _NMRANET_MEMORYCONFIG_HXX_
+#endif // _OPENLCB_MEMORYCONFIG_HXX_

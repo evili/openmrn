@@ -32,8 +32,8 @@
  * @date 10 Mar 2015
  */
 
-#ifndef _NMRANET_SIMPLESTACK_HXX_
-#define _NMRANET_SIMPLESTACK_HXX_
+#ifndef _OPENLCB_SIMPLESTACK_HXX_
+#define _OPENLCB_SIMPLESTACK_HXX_
 
 #include <fcntl.h>
 
@@ -170,6 +170,15 @@ public:
         auto *port = new HubDeviceSelect<CanHubFlow>(&canHub0_, device);
         additionalComponents_.emplace_back(port);
     }
+
+    /// Adds a CAN bus port with select-based asynchronous driver API.
+    /// @param fd file descriptor to add to can hub
+    /// @param on_error Notifiable to wakeup on error
+    void add_can_port_select(int fd, Notifiable *on_error = nullptr)
+    {
+        auto *port = new HubDeviceSelect<CanHubFlow>(&canHub0_, fd, on_error);
+        additionalComponents_.emplace_back(port);
+    }
 #endif
 
     /// Adds a gridconnect port to the CAN bus.
@@ -291,6 +300,32 @@ public:
     /// Overwrites all events in the eeprom with a brand new event ID.
     void factory_reset_all_events(const InternalConfigData &ofs, int fd);
 
+    /// Helper function to send an event report to the bus. Performs
+    /// synchronous (dynamic) memory allocation so use it sparingly and when
+    /// there is sufficient amount of RAM available.
+    /// @param event_id is the event to send off.
+    void send_event(uint64_t event_id)
+    {
+        auto *b = node()->iface()->global_message_write_flow()->alloc();
+        b->data()->reset(Defs::MTI_EVENT_REPORT, node()->node_id(),
+            eventid_to_buffer(event_id));
+        node()->iface()->global_message_write_flow()->send(b);
+    }
+
+    /// Sends an addressed message to the bus. Performs
+    /// synchronous (dynamic) memory allocation so use it sparingly and when
+    /// there is sufficient amount of RAM available.
+    /// @param mti is the message to send
+    /// @param dst is the node to send message to.
+    /// @param payload is the contents of the message
+    void send_message_to(
+        Defs::MTI mti, NodeHandle dst, const string &payload = EMPTY_PAYLOAD)
+    {
+        auto *b = node()->iface()->addressed_message_write_flow()->alloc();
+        b->data()->reset(mti, node()->node_id(), dst, payload);
+        node()->iface()->addressed_message_write_flow()->send(b);
+    }
+
 protected:
     /// Call this function once after the actual IO ports are set up. Calling
     /// before the executor starts looping is okay.
@@ -405,4 +440,4 @@ private:
 
 } // namespace openlcb
 
-#endif //  _NMRANET_SIMPLESTACK_HXX_
+#endif //  _OPENLCB_SIMPLESTACK_HXX_
