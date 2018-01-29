@@ -37,6 +37,8 @@
 #include <vector>
 #include <algorithm>
 
+#include "utils/macros.h"
+
 /// An mostly std::set<> compatible class that stores the internal data in a
 /// sorted vector. Has low memory overhead; insertion cost is pretty high and
 /// lookup cost is logarithmic. Useful when a few insertions happen (for
@@ -74,6 +76,11 @@ public:
         return container_.begin() + sortedCount_;
     }
 
+    /// @return the number of entries in the map.
+    size_t size() {
+        return container_.size();
+    }
+    
     /// @param key what to search for @return iterator, see std::lower_bound.
     template<class key_type>
     iterator lower_bound(key_type key)
@@ -91,10 +98,22 @@ public:
         return std::upper_bound(container_.begin(), container_.end(), key,
                                 CMP());
     }
-
+    
+    /// Searches for a single entry. @param key is what to search for. @return
+    /// end() if search key was not found; else the first entry that is == key.
+    template<class key_type>
+    iterator find(key_type key)
+    {
+        lazy_init();
+        auto lb = lower_bound(key);
+        auto ub = upper_bound(key);
+        if (ub == lb) return end();
+        return lb;
+    }
+    
     /// @param key what to search for @return iterators, see std::equal_range.
     template<class key_type>
-    pair<iterator, iterator> equal_range(key_type key)
+    std::pair<iterator, iterator> equal_range(key_type key)
     {
         lazy_init();
         return std::equal_range(container_.begin(), container_.end(), key,
@@ -110,7 +129,23 @@ public:
     /// Removes an entry from the vector, pointed by an iterator.
     void erase(const iterator &it)
     {
+        HASSERT(sortedCount_ > 0);
         container_.erase(it);
+        --sortedCount_;
+    }
+
+    /// Removes a sequence of entries from the vector, pointed by a pair of
+    /// iterators.
+    void erase(const iterator &it_b, const iterator& it_e)
+    {
+        container_.erase(it_b, it_e);
+        lazy_init(); // will set sortedCount_.
+    }
+
+    /// Removes all entries.
+    void clear() {
+        container_.clear();
+        sortedCount_ = 0;
     }
 
 private:

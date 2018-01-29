@@ -31,8 +31,8 @@
  * @date 20 October 2013
  */
 
-#ifndef _NMRANET_STREAM_HXX_
-#define _NMRANET_STREAM_HXX_
+#ifndef _OPENLCB_STREAM_HXX_
+#define _OPENLCB_STREAM_HXX_
 
 #include "utils/RBTree.hxx"
 #include "utils/RingBuffer.hxx"
@@ -231,4 +231,4 @@ struct IdStreamType
 
 };
 
-#endif /* _NMRANET_STREAM_HXX_ */
+#endif // _OPENLCB_STREAM_HXX_

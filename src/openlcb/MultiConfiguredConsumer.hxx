@@ -33,8 +33,8 @@
  * @date 6 Sep 2015
  */
 
-#ifndef _NMRANET_MULTICONFIGUREDCONSUMER_HXX_
-#define _NMRANET_MULTICONFIGUREDCONSUMER_HXX_
+#ifndef _OPENLCB_MULTICONFIGUREDCONSUMER_HXX_
+#define _OPENLCB_MULTICONFIGUREDCONSUMER_HXX_
 
 #include "openlcb/ConfigRepresentation.hxx"
 
@@ -148,7 +148,9 @@ private:
                                 BarrierNotifiable *done)
     {
         Defs::MTI mti = Defs::MTI_CONSUMER_IDENTIFIED_VALID;
-        if (pins_[registry_entry.user_arg >> 1]->is_clr())
+        unsigned b1 = pins_[registry_entry.user_arg >> 1]->is_set() ? 1 : 0;
+        unsigned b2 = registry_entry.user_arg & 1;  // on or off event? 
+        if (b1 ^ b2)
         {
             mti++; // INVALID
         }
@@ -173,4 +175,4 @@ private:
 
 } // namespace openlcb
 
-#endif // _NMRANET_MULTICONFIGUREDCONSUMER_HXX_
+#endif // _OPENLCB_MULTICONFIGUREDCONSUMER_HXX_

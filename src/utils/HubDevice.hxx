@@ -44,7 +44,7 @@ template <class Data> class FdHubWriteFlow;
 /// Template-nonspecific base class for @ref FdHubPort. The purpose of this
 /// class is to avoid compiling this code multiple times for differently typed
 /// devices (and thus saving flash space).
-class FdHubPortBase : public Destructable, private Atomic
+class FdHubPortBase : public FdHubPortInterface, private Atomic
 {
 public:
     /// How many bytes of stack should we allocate to the write thread's stack.
@@ -56,7 +56,7 @@ public:
     /// @param done will be called when this file is closed and removed from
     /// the hub (usually due to an error).
     FdHubPortBase(int fd, Notifiable *done)
-        : fd_(fd)
+        : FdHubPortInterface(fd)
         , writeThread_(fill_thread_name('W', fd), 3, kWriteThreadStackSize)
         , writeService_(&writeThread_)
         , barrier_(done)
@@ -68,12 +68,6 @@ public:
 
     virtual ~FdHubPortBase()
     {
-    }
-
-    /// @return the filedes to read/write.
-    int fd()
-    {
-        return fd_;
     }
 
     /// Puts the desired thread name for the read or write thread.
@@ -114,9 +108,9 @@ protected:
             else
             {
                 hasError_ = 1;
-                ::close(fd_);
             }
         }
+        ::close(fd_);
         unregister_write_port();
     }
 
@@ -159,16 +153,18 @@ protected:
                         done += ret;
                         continue;
                     }
+                    if ((ret < 0) && (errno == EINTR || errno == EAGAIN))
+                    {
+                        continue;
+                    }
 // Now: we have an error.
-#ifdef __linux__
+#if defined(__linux__)
                     if (!ret)
                     {
                         LOG_ERROR("EOF reading fd %d", port_->fd_);
                     }
-                    else if (errno == EINTR || errno == EAGAIN)
+                    else
                     {
-                        continue;
-                    } else {
                         LOG_ERROR("Error reading fd %d: (%d) %s", port_->fd_,
                             errno, strerror(errno));
                     }
@@ -190,8 +186,6 @@ protected:
 
     /** Temporary buffer used for rendering thread names. */
     char threadName_[30];
-    /** The device file descriptor. */
-    int fd_;
     /** This executor is running the writes. */
     Executor<1> writeThread_;
     /** Service for the write flow. */

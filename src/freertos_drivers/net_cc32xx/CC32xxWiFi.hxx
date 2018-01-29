@@ -39,6 +39,8 @@
 #include <string>
 
 #include "os/OS.hxx"
+#include "utils/Singleton.hxx"
+#include "utils/format_utils.hxx"
 #include "freertos_drivers/common/WifiDefs.hxx"
 
 class CC32xxSocket;
@@ -47,9 +49,27 @@ class CC32xxSocket;
  * CC32xx Wi-Fi stack.  This is designed to be a singleton.  It should only
  * be instantiated once.
  */
-class CC32xxWiFi
+class CC32xxWiFi : public Singleton<CC32xxWiFi>
 {
 public:
+    /** CC32xx SimpleLink forward declaration */
+    struct WlanEvent;
+
+    /** CC32xx SimpleLink forward declaration */
+    struct NetAppEvent;
+
+    /** CC32xx SimpleLink forward declaration */
+    struct SockEvent;
+
+    /** CC32xx SimpleLink forward declaration */
+    struct HttpServerEvent;
+
+    /** CC32xx SimpleLink forward declaration */
+    struct HttpServerResponse;
+
+    /** CC32xx SimpleLink forward declaration */
+    struct FatalErrorEvent;
+    
     /** Security types.
      */
     enum SecurityType
@@ -79,8 +99,9 @@ public:
     }
 
     /** Startup the Wi-Fi.
+     * @param device role
      */
-    void start();
+    void start(WlanRole role = WlanRole::STA);
 
     /** Stops the Wi-Fi in preparation for a reboot. TODO: does this need to be
      * called from a critical section?
@@ -92,37 +113,50 @@ public:
      * @param security_key access point security key
      * @param security_type specifies security type 
      */
-    void wlan_connect(const char *ssid, const char* security_key,
+    void wlan_connect(const char *ssid, const char *security_key,
                       SecurityType security_type);
 
+
+    /** Setup access point role credentials.
+     * @param ssid access point ssid
+     * @param security_key access point security key
+     * @param security_type specifies security type 
+     */
+    void wlan_setup_ap(const char *ssid, const char *security_key,
+                       SecurityType security_type);
 
     /** @return true if the wlan interface is ready to establish outgoing
      * connections. */
     bool wlan_ready()
     {
-        return connected && ipAquired;
+        return (connected || wlanRole == WlanRole::AP) && ipAcquired;
+    }
+
+    /** Get the current Wi-Fi role.
+     * @return the current Wi-Fi role.
+     */
+    WlanRole wlan_role()
+    {
+        return wlanRole;
     }
 
     /** @return 0 if !wlan_ready, else a debugging status code. */
     WlanState wlan_startup_state()
     {
-        if (!connected) return WlanState::NOT_ASSOCIATED;
-        if (!ipAquired) return WlanState::NO_IP;
+        if (!connected && wlanRole != WlanRole::AP)
+        {
+            return WlanState::NOT_ASSOCIATED;
+        }
+        if (!ipAcquired)
+        {
+            return WlanState::NO_IP;
+        }
         return WlanState::OK;
     }
 
     /** Updates the blinker based on connection state. Noop if wlan_ready()
      * returns true.*/
     void connecting_update_blinker();
-
-    /** Get the singleton instance pointer.
-     * @return singleton instance pointer
-     */
-    static CC32xxWiFi *instance()
-    {
-        HASSERT(instance_);
-        return instance_;
-    }
 
     /** Add a saved WLAN profile.
      * @param ssid WLAN SSID of the profile to save
@@ -184,7 +218,7 @@ public:
      */
     uint32_t wlan_ip()
     {
-        return ipAquired ? ipAddress : 0;
+        return ipAcquired ? ipAddress : 0;
     }
 
     /** Get the SSID of the access point we are connected to.
@@ -208,24 +242,85 @@ public:
      * isthe function to execute.*/
     void run_on_network_thread(std::function<void()> callback);
 
+    /** Add an HTTP get token callback.  A get token is a string that takes the
+     * form "__SL_G_*".  The form "__SL_G_U*" is the form that is reserved for
+     * user defined tokens.  The * can be any two characters that uniquely
+     * identify the token.  When the token is found in an HTML file, the
+     * network processor will call the supplied callback in order for the user
+     * to return the resulting string.  The result returned will be clipped at
+     * (MAX_TOKEN_VALUE_LEN - 1), which is (64 - 1) bytes.  All tokens must be
+     * an exact match.
+     *
+     * Use Case Example:
+     * @code
+     * class SomeClass
+     * {
+     * public:
+     *     SomeClass()
+     *     {
+     *         add_http_get_callback(std::make_pair(std::bind(&SomeClass::http_get, this), "__SL_G_U.A");
+     *     }
+     *
+     * private:
+     *     string http_get()
+     *     {
+     *         return "some_string";
+     *     }
+     * }
+     * @endcode
+     * In the example above, the string "__SL_G_U.A" when used in an HTML file
+     * will be recognized by the HTTP server replaced with result of the server
+     * calling SomeClass::http_get().
+     *
+     * Additional documentation on the CC32xx HTTP Web Server can be found in
+     * the
+     * <a href="http://www.ti.com/lit/ug/swru368a/swru368a.pdf">
+     * CC3100/CC3200 SimpleLink Wi-Fi Internet-on-a-Chip User's Guide</a>
+     *
+     * @param callback the std::pair<> of the function to execute and the
+     *        matching token to execute the callback on.  The second (const
+     *        char *) argument of the std::pair must live for as long as the
+     *        callback is valid.
+     */
+    void add_http_get_callback(std::pair<std::function<std::string()>,
+                                         const char *> callback)
+    {
+        OSMutexLock l(&lock_);
+        httpGetCallbacks_.emplace_back(std::move(callback));
+    }
+
     /** This function handles WLAN events.  This is public only so that an
      * extern "C" method can call it.  DO NOT use directly.
-     * @param context pointer to WLAN Event Info
+     * @param event pointer to WLAN Event Info
      */
-    void wlan_event_handler(void *context);
+    void wlan_event_handler(WlanEvent *event);
 
     /** This function handles network events such as IP acquisition, IP leased,
      * IP released etc.  This is public only so that an extern "C" method can
      * call it.  DO NOT use directly.
-     * @param context Pointer indicating device acquired IP
+     * @param event Pointer indicating device acquired IP
      */
-    void net_app_event_handler(void *context);
+    void net_app_event_handler(NetAppEvent *event);
 
     /** This function handles socket events indication.  This is public only so
      * that an extern "C" method can call it.  DO NOT use directly.
-     * @param context pointer to Socket Event Info
+     * @param event pointer to Socket Event Info
      */
-    void sock_event_handler(void *context);
+    void sock_event_handler(SockEvent *event);
+
+    /** This function handles http server callback indication.  This is public
+     * only so that an extern "C" method can call it.  DO NOT use directly.
+     * @param event pointer to HTTP Server Event info
+     * @param response pointer to HTTP Server Response info
+     */
+    void http_server_callback(HttpServerEvent *event,
+                              HttpServerResponse *response);
+
+    /** This Function Handles the Fatal errors
+     *  @param  event - Contains the fatal error data
+     *  @return     None
+     */
+    void fatal_error_callback(FatalErrorEvent* event);
 
     /** Returns a string contianing the version numbers of the network
      * interface. */
@@ -244,6 +339,13 @@ private:
      */
     SecurityType security_type_from_simplelink(uint8_t sec_type);
 
+    /** Translates the SimpleLink code from the network scan to SecurityType
+     * enum.
+     * @param sec_type simplelink network scan security result
+     * @return security type
+     */
+    SecurityType security_type_from_scan(unsigned sec_type);
+    
     /** Set the CC32xx to its default state, including station mode.
      */
     void set_default_state();
@@ -262,20 +364,32 @@ private:
     void wlan_task();
 
     /** Asynchronously wakeup the select call.
-     * @param data -1 for no action, else socket descriptor if socket shall be
-     *             closed.
      */
-    void select_wakeup(int16_t data = -1);
+    void select_wakeup();
+
+    /** Remove a socket from the known sockets that might be part of the
+     * sl_Select fdset.
+     * @param sd socket descriptor to remove
+     */
+    void fd_remove(int16_t sd);
 
     /** Add socket to the read fd set.
-     * @param socket socket descriptor to add
+     * @param sd socket descriptor to add
      */
-    void fd_set_read(int16_t socket);
+    void fd_set_read(int16_t sd);
 
     /** Add socket to the write fd set.
-     * @param socket socket descriptor to add
+     * @param sd socket descriptor to add
      */
-    void fd_set_write(int16_t socket);
+    void fd_set_write(int16_t sd);
+
+    /** Get the IP address for a http request.
+     * @return string representation of the IP address
+     */
+    string http_get_ip_address()
+    {
+        return ipv4_to_string(ipAddress);
+    }
 
     static CC32xxWiFi *instance_; /**< singleton instance pointer. */
     uint32_t ipAddress; /**< assigned IP adress */
@@ -283,6 +397,11 @@ private:
 
     /// List of callbacks to execute on the network thread.
     std::vector<std::function<void()> > callbacks_;
+
+    /// List of callbacks for http get tokens
+    std::vector<std::pair<std::function<std::string()>, const char *>>
+        httpGetCallbacks_;
+
     /// Protects callbacks_ vector.
     OSMutex lock_;
 
@@ -290,9 +409,11 @@ private:
 
     int16_t rssi; /**< receive signal strength indicator */
 
+    WlanRole wlanRole; /**< the Wi-Fi role we are in */
+
     unsigned connected        : 1; /**< AP connected state */
     unsigned connectionFailed : 1; /**< Connection attempt failed status */
-    unsigned ipAquired        : 1; /**< IP address aquired state */
+    unsigned ipAcquired        : 1; /**< IP address aquired state */
     unsigned ipLeased         : 1; /**< IP address leased to a client(AP mode)*/
     unsigned smartConfigStart : 1; /**< Smart config in progress */
 
