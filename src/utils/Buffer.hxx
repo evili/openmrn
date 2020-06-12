@@ -38,6 +38,7 @@
 //#define DEBUG_BUFFER_MEMORY
 
 #include <memory>
+#include <atomic>
 #include <new>
 #include <cstdint>
 #include <cstdlib>
@@ -54,14 +55,18 @@
 
 class DynamicPool;
 class FixedPool;
+class LimitedPool;
 class Pool;
 template <class T> class Buffer;
 class BufferBase;
+class ForwardAllocator;
 
 namespace openlcb
 {
 class AsyncIfTest;
 }
+
+extern const unsigned LARGEST_BUFFERPOOL_BUCKET;
 
 /** main buffer pool instance */
 extern DynamicPool *mainBufferPool;
@@ -83,7 +88,7 @@ public:
     /// multiple owners.
     uint16_t references()
     {
-        return count_;
+        return count_.load();
     }
 
     /// Specifies that a given BarrierNotifiable must be called when the Buffer
@@ -118,14 +123,6 @@ public:
         return size_;
     }
 
-    /** Expand the buffer by allocating a buffer double the size, copying the
-     * contents to the new buffer, and freeing the old buffer.  The "this"
-     * pointer
-     * of the caller will be used to free the buffer.
-     * @return newly expanded buffer
-     */
-    BufferBase *expand();
-
 protected:
     /** Get a pointer to the pool that this buffer belongs to.
      * @return pool that this buffer belongs to
@@ -135,11 +132,6 @@ protected:
         return pool_;
     }
 
-    /** size of data in bytes */
-    uint16_t size_;
-
-    /** number of references in use */
-    uint16_t count_;
     /** Reference to the pool from whence this buffer came */
     Pool *pool_;
 
@@ -147,16 +139,22 @@ protected:
     /// everywhere. May be nullptr.
     BarrierNotifiable *done_;
 
+    /** size of data in bytes */
+    uint16_t size_;
+
+    /** number of references in use */
+    std::atomic_uint_least16_t count_;
+
     /** Constructor.  Initializes count to 1 and done_ to NULL.
      * @param size size of buffer data
      * @param pool pool this buffer belong to
      */
     BufferBase(size_t size, Pool *pool)
         : QMember()
-        , size_(size)
-        , count_(1)
         , pool_(pool)
         , done_(NULL)
+        , size_(size)
+        , count_(1)
     {
     }
 
@@ -181,6 +179,9 @@ protected:
 
     /** Allow FixedPool access to our constructor */
     friend class FixedPool;
+
+    /** Allow LimitedPool access to our fields */
+    friend class LimitedPool;
 
     DISALLOW_COPY_AND_ASSIGN(BufferBase);
 };
@@ -272,6 +273,12 @@ template<typename T> BufferPtr<T> get_buffer_deleter(Buffer<T>* b) {
 class Pool
 {
 public:
+    /** @return the total memory held by this pool. */
+    size_t total_size()
+    {
+        return totalSize;
+    }
+
     /** Get a free item out of the pool.
      * @param result pointer to a pointer to the result
      * @param flow if !NULL, then the alloc call is considered async and will
@@ -358,6 +365,8 @@ protected:
 private:
     /** Allow BufferBase to access this class */
     friend class BufferBase;
+    /** LimitedPool proxies to a base Pool. */
+    friend class LimitedPool;
 
     /** Allow Buffer to access this class */
     template <class T> friend class Buffer;
@@ -397,7 +406,10 @@ public:
         Bucket *bucket = (Bucket *)malloc(sizeof(Bucket) * count);
         Bucket *now = bucket;
 
-        for (int i = 0; i < count; ++i)
+        new (now) Bucket(s);
+        now++;
+
+        for (int i = 1; i < count; ++i)
         {
             new (now) Bucket(va_arg(aq, int));
             now++;
@@ -467,7 +479,6 @@ public:
      */
     DynamicPool(Bucket sizes[])
         : Pool()
-        , totalSize(0)
         , buckets(sizes)
     {
     }
@@ -475,6 +486,21 @@ public:
     /** default destructor */
     ~DynamicPool()
     {
+#ifdef GTEST
+        for (unsigned i = 0; buckets[i].size() != 0; ++i)
+        {
+            // Frees all memory left in the bucket.
+            do
+            {
+                auto *p = static_cast<BufferBase *>(buckets[i].next().item);
+                if (!p)
+                {
+                    break;
+                }
+                ::free(p);
+            } while (true);
+        }
+#endif
         Bucket::destroy(buckets);
     }
 
@@ -489,16 +515,7 @@ public:
      */
     size_t free_items(size_t size) override;
 
-    /** @return the total memory held by this pool. */
-    size_t total_size()
-    {
-        return totalSize;
-    }
-
 protected:
-    /** keep track of total allocated size of memory */
-    size_t totalSize;
-
     /** Free buffer queue */
     Bucket *buckets;
 
@@ -529,6 +546,8 @@ private:
      */
     DynamicPool();
 
+    friend class ForwardAllocator;
+
     DISALLOW_COPY_AND_ASSIGN(DynamicPool);
 };
 
@@ -558,7 +577,6 @@ public:
      */
     FixedPool(size_t item_size, size_t items)
         : Pool()
-        , totalSize(0)
         , mempool(new char[(item_size * items)])
         , itemSize(item_size)
         , items(items)
@@ -598,9 +616,6 @@ public:
     }
 
 protected:
-    /** keep track of total allocated size of memory */
-    size_t totalSize;
-
     /** Free buffer queue */
     Q queue;
 
@@ -644,7 +659,7 @@ private:
 template <class T> void Buffer<T>::unref()
 {
     HASSERT(sizeof(Buffer<T>) <= size_);
-    if (--count_ == 0)
+    if (count_.fetch_sub(1) == 1u)
     {
         this->~Buffer();
         pool_->free(this);

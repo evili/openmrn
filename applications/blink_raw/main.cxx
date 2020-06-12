@@ -32,6 +32,10 @@
  * @date 3 Aug 2013
  */
 
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE // for usleep
+#endif
+
 #include <stdio.h>
 #include <unistd.h>
 

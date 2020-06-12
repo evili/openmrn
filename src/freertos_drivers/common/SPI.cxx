@@ -31,11 +31,57 @@
  * @date 29 May 2016
  */
 
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <cstdint>
-#include <unistd.h>
 #include <fcntl.h>
 #include "Devtab.hxx"
 #include "SPI.hxx"
+
+/** Conduct multiple message transfers with one stop at the end.
+ * @param msgs array of messages to transfer
+ * @param num number of messages to transfer
+ * @return total number of bytes transfered, -errno upon failure
+ */
+__attribute__((optimize("-O3")))
+int SPI::transfer_messages(struct spi_ioc_transfer *msgs, int num)
+{
+    //HASSERT(num > 0);
+
+    int count = 0;
+    int result;
+
+    lock_.lock();
+    bus_lock();
+    for (int i = 0; i < num; ++i, ++msgs)
+    {
+        count += msgs->len;
+        csAssert();
+        result = transfer(msgs);
+        if (UNLIKELY(result < 0))
+        {
+            /* something bad happened, reset the bus and bail */
+            csDeassert();
+            bus_unlock();
+            lock_.unlock();
+            return result;
+        }
+        if (msgs->cs_change)
+        {
+            if (UNLIKELY(msgs->delay_usec))
+            {
+                usleep(msgs->delay_usec);
+            }
+            csDeassert();
+        }
+    }
+    bus_unlock();
+    lock_.unlock();
+
+    return count;
+}
 
 /** Read from a file or device.
  * @param file file reference for this device
@@ -43,6 +89,7 @@
  * @param count number of bytes to read
  * @return number of bytes read upon success, -errno upon failure
  */
+__attribute__((optimize("-O3")))
 ssize_t SPI::read(File *file, void *buf, size_t count)
 {
     int result;
@@ -78,6 +125,7 @@ ssize_t SPI::read(File *file, void *buf, size_t count)
  * @param count number of bytes to write
  * @return number of bytes written upon success, -errno upon failure
  */
+__attribute__((optimize("-O3")))
 ssize_t SPI::write(File *file, const void *buf, size_t count)
 {
     int result;
@@ -113,6 +161,7 @@ ssize_t SPI::write(File *file, const void *buf, size_t count)
  * @param data key data
  * @return 0 upon success, -errno upon failure
  */
+__attribute__((optimize("-O3")))
 int SPI::ioctl(File *file, unsigned long int key, unsigned long data)
 {
     HASSERT(IOC_TYPE(key) == SPI_IOC_MAGIC);
@@ -133,6 +182,12 @@ int SPI::ioctl(File *file, unsigned long int key, unsigned long data)
     {
         default:
             return -EINVAL;
+        case SPI_IOC_GET_OBJECT_REFERENCE:
+        {
+            SPI **self = (SPI**)data;
+            *self = this;
+            return 0;
+        }
         case SPI_IOC_RD_MODE:
         {
             uint8_t *m = (uint8_t*)data;
@@ -191,47 +246,5 @@ int SPI::ioctl(File *file, unsigned long int key, unsigned long data)
     bus_unlock();
 
     return result;
-}
-
-/** Conduct multiple message transfers with one stop at the end.
- * @param msgs array of messages to transfer
- * @param num number of messages to transfer
- * @return total number of bytes transfered, -errno upon failure
- */
-int SPI::transfer_messages(struct spi_ioc_transfer *msgs, int num)
-{
-    HASSERT(num > 0);
-
-    int count = 0;
-    int result;
-
-    lock_.lock();
-    bus_lock();
-    for (int i = 0; i < num; ++i)
-    {
-        count += msgs[i].len;
-        csAssert();
-        result = transfer(msgs + i);
-        if (result < 0)
-        {
-            /* something bad happened, reset the bus and bail */
-            csDeassert();
-            bus_unlock();
-            lock_.unlock();
-            return result;
-        }
-        if (msgs[i].cs_change)
-        {
-            if (msgs[i].delay_usec)
-            {
-                usleep(msgs[i].delay_usec);
-            }
-            csDeassert();
-        }
-    }
-    bus_unlock();
-    lock_.unlock();
-
-    return count;
 }
 

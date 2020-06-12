@@ -56,8 +56,11 @@
 #include "TivaDCC.hxx"
 #include "TivaEEPROMEmulation.hxx"
 #include "TivaEEPROMBitSet.hxx"
+#include "TivaGPIO.hxx"
 #include "DummyGPIO.hxx"
+#include "GpioWrapper.hxx"
 #include "bootloader_hal.h"
+#include "dcc/DccOutput.hxx"
 
 struct Debug {
   // High between start_cutout and end_cutout from the TivaRailcom driver.
@@ -140,12 +143,6 @@ void enter_bootloader()
 #define STARTUP_DELAY_CYCLES 2
 #define DEADBAND_ADJUST      80
 
-#define DECL_PIN(NAME, PORT, NUM)                \
-  static const auto NAME##_PERIPH = SYSCTL_PERIPH_GPIO##PORT; \
-  static const auto NAME##_BASE = GPIO_PORT##PORT##_BASE; \
-  static const auto NAME##_PIN = GPIO_PIN_##NUM
-
-
 struct RailcomDefs
 {
     static const uint32_t CHANNEL_COUNT = 1;
@@ -171,7 +168,7 @@ struct RailcomDefs
         CH1_Pin::set_hw();
     }
 
-    static void enable_measurement() {}
+    static void enable_measurement(bool) {}
     static void disable_measurement() {}
     static bool need_ch1_cutout() { return true; }
     static uint8_t get_feedback_channel() { return 0xff; }
@@ -183,8 +180,13 @@ struct RailcomDefs
         if (!CH1_Pin::get()) ret |= 1;
         return ret;
     }
+
+    static unsigned get_timer_tick() {
+        return MAP_TimerValueGet(TIMER5_BASE, TIMER_TIMA_TIMEOUT);
+    }
 };
 
+uint32_t feedback_sample_overflow_count;
 const uint32_t RailcomDefs::UART_BASE[] = {UART1_BASE};
 const uint32_t RailcomDefs::UART_PERIPH[] = {SYSCTL_PERIPH_UART1};
 
@@ -200,6 +202,13 @@ struct DccHwDefs {
   /// interrupt number of the interval timer
   static const unsigned long INTERVAL_INTERRUPT = INT_TIMER1A;
 
+  /// Defines how much time for railcom timing compared to the standard
+  /// length this hardware needs. We have to start a bit earlier due to the
+  /// slow FET turn-ons.
+  static const int RAILCOM_CUTOUT_START_DELTA_USEC = -20;
+  static const int RAILCOM_CUTOUT_MID_DELTA_USEC = 0;
+  static const int RAILCOM_CUTOUT_END_DELTA_USEC = -10;
+
   /** These timer blocks will be synchronized once per packet, when the
    *  deadband delay is set up. */
   static const auto TIMER_SYNC = TIMER_0A_SYNC | TIMER_0B_SYNC | TIMER_1A_SYNC | TIMER_1B_SYNC;
@@ -210,7 +219,6 @@ struct DccHwDefs {
 
   using PIN_H = ::BOOSTER_H_Pin;
   using PIN_L = ::BOOSTER_L_Pin;
-  using BOOSTER_ENABLE_Pin = DummyPin;
 
   /** Defines whether the high driver pin is inverted or not. A non-inverted
    *  (value==false) pin will be driven high during the first half of the DCC
@@ -224,7 +232,7 @@ struct DccHwDefs {
    *  (minus L_DEADBAND_DELAY_NSEC), and low during the first half.  A
    *  non-inverted pin will be driven low as safe setting at startup. */
   static const bool PIN_L_INVERT = false;
-  
+
   /** @returns the number of preamble bits to send exclusive of end of packet
    *  '1' bit */
   static int dcc_preamble_count() { return 16; }
@@ -238,17 +246,47 @@ struct DccHwDefs {
    * turning on the low driver. */
   static const int L_DEADBAND_DELAY_NSEC = 250;
 
-  /** @returns true to produce the RailCom cutout, else false */
-  static bool railcom_cutout() { return false; }
-
   /** number of outgoing messages we can queue */
   static const size_t Q_SIZE = 4;
 
-
   // Pins defined for railcom
-  using RAILCOM_TRIGGER_Pin = ::RAILCOM_TRIGGER_Pin;
-  static const auto RAILCOM_TRIGGER_INVERT = true;
+  using RAILCOM_TRIGGER_Pin = InvertedGpio<::RAILCOM_TRIGGER_Pin>;
   static const auto RAILCOM_TRIGGER_DELAY_USEC = 6;
+
+  struct BOOSTER_ENABLE_Pin
+  {
+      static void set(bool value)
+      {
+          if (value)
+          {
+              PIN_H::set_hw();
+              PIN_L::set_hw();
+          }
+          else
+          {
+              PIN_H::set(PIN_H_INVERT);
+              PIN_H::set_output();
+              PIN_H::set(PIN_H_INVERT);
+
+              PIN_L::set(PIN_L_INVERT);
+              PIN_L::set_output();
+              PIN_L::set(PIN_L_INVERT);
+          }
+      }
+
+      static void hw_init() {
+          PIN_H::hw_init();
+          PIN_L::hw_init();
+          set(false);
+      }
+  };
+
+  using InternalBoosterOutput =
+      DccOutputHwReal<DccOutput::TRACK, BOOSTER_ENABLE_Pin, RAILCOM_TRIGGER_Pin,
+          1, RAILCOM_TRIGGER_DELAY_USEC, 0>;
+  using Output1 = InternalBoosterOutput;
+  using Output2 = DccOutputHwDummy<DccOutput::PGM>;
+  using Output3 = DccOutputHwDummy<DccOutput::LCC>;
 
   static const auto RAILCOM_UART_BASE = UART1_BASE;
   static const auto RAILCOM_UART_PERIPH = SYSCTL_PERIPH_UART1;
@@ -257,6 +295,20 @@ struct DccHwDefs {
 
 
 static TivaDCC<DccHwDefs> tivaDCC("/dev/mainline", &railcom_driver);
+
+DccOutput *get_dcc_output(DccOutput::Type type)
+{
+    switch (type)
+    {
+        case DccOutput::TRACK:
+            return DccOutputImpl<DccHwDefs::InternalBoosterOutput>::instance();
+        case DccOutput::PGM:
+            return DccOutputImpl<DccHwDefs::Output2>::instance();
+        case DccOutput::LCC:
+            return DccOutputImpl<DccHwDefs::Output3>::instance();
+    }
+    return nullptr;
+}
 
 extern "C" {
 /** Blink LED */
@@ -267,7 +319,8 @@ void dcc_generator_init(void);
 
 void hw_set_to_safe(void)
 {
-    tivaDCC.disable_output();
+    DccHwDefs::InternalBoosterOutput::set_disable_reason(
+        DccOutput::DisableReason::INITIALIZATION_PENDING);
     GpioInit::hw_set_to_safe();
 }
 
@@ -312,6 +365,16 @@ void timer5a_interrupt_handler(void)
 void uart1_interrupt_handler(void)
 {
   railcom_driver.os_interrupt_handler();
+}
+
+void timer1a_interrupt_handler(void)
+{
+    tivaDCC.interrupt_handler();
+}
+
+void timer0a_interrupt_handler(void)
+{
+    tivaDCC.os_interrupt_handler();
 }
 
 void diewith(uint32_t pattern)
@@ -365,7 +428,7 @@ void hw_preinit(void)
     MAP_IntPrioritySet(INT_USB0, 0xff); // USB interrupt low priority
 
     /* Initialize the DCC Timers and GPIO outputs */
-    tivaDCC.hw_init();
+    tivaDCC.hw_preinit();
 
     /* Checks the SW1 pin at boot time in case we want to allow for a debugger
      * to connect. */
@@ -383,11 +446,10 @@ void hw_preinit(void)
     g_gpio_stored_bit_set = new EEPROMStoredBitSet<TivaEEPROMHwDefs<EEPROM_BIT_COUNT, EEPROM_BITS_PER_CELL>>(2, 2);
 }
 
-/** Timer interrupt for DCC packet handling.
- */
-void timer1a_interrupt_handler(void)
+void hw_postinit(void)
 {
-    tivaDCC.interrupt_handler();
+    DccHwDefs::InternalBoosterOutput::clear_disable_reason(
+        DccOutput::DisableReason::INITIALIZATION_PENDING);
 }
 
 }

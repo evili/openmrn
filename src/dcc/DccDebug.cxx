@@ -38,7 +38,7 @@
 namespace dcc
 {
 
-string packet_to_string(const DCCPacket &pkt)
+string packet_to_string(const DCCPacket &pkt, bool bin_payload)
 {
     if (pkt.packet_header.is_pkt)
     {
@@ -71,15 +71,23 @@ string packet_to_string(const DCCPacket &pkt)
     {
         return options + " no payload";
     }
-    if (pkt.packet_header.is_marklin) {
+    if (bin_payload || pkt.packet_header.is_marklin)
+    {
+        options += "[";
         for (unsigned i = 0; i < pkt.dlc; ++i)
         {
-            options += StringPrintf(" 0x%02x", pkt.payload[i]);
+            options += StringPrintf("%02x ", pkt.payload[i]);
         }
+        options.pop_back();
+        options += "]";
+    }
+    if (pkt.packet_header.is_marklin) {
         return options;
     }
     unsigned ofs = 0;
     bool is_idle_packet = false;
+    bool is_basic_accy_packet = false;
+    unsigned accy_address = 0;
     if (pkt.payload[ofs] == 0xff)
     {
         options += " Idle packet";
@@ -100,9 +108,12 @@ string packet_to_string(const DCCPacket &pkt)
         options += StringPrintf(" Short Address %u", pkt.payload[ofs]);
         ofs++;
     }
-    else if ((pkt.payload[ofs] & 0xC0) == 0X80)
+    else if ((pkt.payload[ofs] & 0xC0) == 0x80)
     {
         // accessory decoder
+        is_basic_accy_packet = true;
+        accy_address = (pkt.payload[ofs] & 0b111111) << 3;
+        ofs++;
     }
     else if (pkt.payload[ofs] >= 192 && pkt.payload[ofs] <= 231)
     {
@@ -116,7 +127,17 @@ string packet_to_string(const DCCPacket &pkt)
     }
     uint8_t cmd = pkt.payload[ofs];
     ofs++;
-    if ((cmd & 0xC0) == 0x40)
+    if (is_basic_accy_packet && ((cmd & 0x80) == 0x80))
+    {
+        accy_address |= cmd & 0b111;
+        cmd >>= 3;
+        bool is_activate = cmd & 1;
+        cmd >>= 1;
+        accy_address |= ((~cmd) & 0b111) << 9;
+        options += StringPrintf(" Accy %u %s", accy_address,
+            is_activate ? "activate" : "deactivate");
+    }
+    else if ((cmd & 0xC0) == 0x40)
     {
         // Speed and direction
         bool is_forward = (cmd & 0x20) != 0;
@@ -140,6 +161,26 @@ string packet_to_string(const DCCPacket &pkt)
             default:
                 options += StringPrintf(" %u", speed - 3);
         }
+    }
+    else if (cmd == 0x3F) {
+        // 128-speed step
+        uint8_t val = pkt.payload[ofs];
+        ofs++;
+        bool is_forward = (val & 0x80) != 0;
+        uint8_t speed = val & 0x7F;
+        options += " SPD128 ";
+        options += is_forward ? 'F' : 'R';
+        switch (speed)
+        {
+            case 0:
+                options += " 0";
+                break;
+            case 1:
+                options += " E-STOP";
+                break;
+            default:
+                options += StringPrintf(" %u", speed - 1);
+        }        
     }
     else if ((cmd >> 5) == 0b100)
     {
@@ -188,6 +229,7 @@ string packet_to_string(const DCCPacket &pkt)
     else if (cmd == 0 && is_idle_packet)
     {
     }
+    
     // checksum of packet
     if (ofs == pkt.dlc && pkt.packet_header.skip_ec == 0)
     {
@@ -209,6 +251,10 @@ string packet_to_string(const DCCPacket &pkt)
     else
     {
         options += StringPrintf(" [bad dlc, exp %u, actual %u]", ofs, pkt.dlc);
+        while (ofs < pkt.dlc)
+        {
+            options += StringPrintf(" 0x%02x", pkt.payload[ofs++]);
+        }
     }
     return options;
 }

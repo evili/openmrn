@@ -104,15 +104,19 @@
 /// Enable module
 #define HAL_WWDG_MODULE_ENABLED
 
+/* Workaround for the broken UNUSED macro */
+#include "stm32f0xx_hal_def.h"
+#undef UNUSED
+#define UNUSED(x) ((void)((uint32_t)(x)))
+
 /* ######################### Oscillator Values adaptation ################### */
 /**
   * @brief Adjust the value of External High Speed oscillator (HSE) used in your application.
   *        This value is used by the RCC HAL module to compute the system frequency
   *        (when HSE is used as system clock source, directly or through the PLL).  
   */
-#if !defined  (HSE_VALUE) 
-  #define HSE_VALUE    ((uint32_t)8000000) /*!< Value of the External oscillator in Hz */
-#endif /* HSE_VALUE */
+extern const uint32_t HSEValue;
+#define HSE_VALUE HSEValue
 
 /**
   * @brief In the following line adjust the External High Speed oscillator (HSE) Startup 
@@ -171,6 +175,13 @@
 #if !defined  (LSE_VALUE)
  #define LSE_VALUE  ((uint32_t)32768)    /*!< Value of the External Low Speed oscillator in Hz */
 #endif /* LSE_VALUE */     
+
+/**
+  * @brief Time out for LSE start up value in ms.
+  */
+#if !defined  (LSE_STARTUP_TIMEOUT)
+  #define LSE_STARTUP_TIMEOUT  5000U     /*!< Time out for LSE start up, in ms */
+#endif /* LSE_STARTUP_TIMEOUT */
 
 
 /* Tip: To avoid modifying this file each time you need to use different HSE,

@@ -31,6 +31,9 @@
  * @date 6 January 2018
  */
 
+#ifndef _FREERTOS_DRIVERS_COMMON_PWM_HXX_
+#define _FREERTOS_DRIVERS_COMMON_PWM_HXX_
+
 #include "utils/macros.h"
 
 #include "os/Gpio.hxx"
@@ -110,7 +113,7 @@ public:
     {
     }
 
-    ~PWMGPO()
+    virtual ~PWMGPO()
     {
     }
 
@@ -144,14 +147,24 @@ public:
     /// @param dir @ref INPUT or @ref OUTPUT
     void set_direction(Gpio::Direction dir) const override
     {
-        HASSERT(dir == Gpio::Direction::OUTPUT);
+        HASSERT(dir == Gpio::Direction::DOUTPUT);
     }
 
     /// Gets the GPO direction.
     /// @return always returns @ref OUTPUT
     Direction direction() const override
     {
-        return Gpio::Direction::OUTPUT;
+        return Gpio::Direction::DOUTPUT;
+    }
+
+    uint32_t get_on_counts() const
+    {
+        return onCounts_;
+    }
+
+    uint32_t get_off_counts() const
+    {
+        return offCounts_;
     }
 
 private:
@@ -166,3 +179,5 @@ private:
 
     DISALLOW_COPY_AND_ASSIGN(PWMGPO);
 };
+
+#endif // _FREERTOS_DRIVERS_COMMON_PWM_HXX_
