@@ -65,14 +65,6 @@ static Stm32EEPROMEmulation eeprom0("/dev/eeprom", 512);
 const size_t EEPROMEmulation::SECTOR_SIZE = 2048;
 
 
-/** File system driver. */
-extern char __flash_fs_start;
-extern char __flash_fs_end;
-static Stm32SPIFFS spiffs0((size_t)&__flash_fs_start,
-                           (&__flash_fs_end - &__flash_fs_start), 256 * 1024,
-                           256 /* logical page size */, 16 /* num open */,
-                           64 /* cache pages */);
-
 extern "C" {
 
 /** Blink LED */
@@ -198,7 +190,6 @@ static void clock_setup(void)
     RCC_OscInitStruct.PLL.PLLN = 432;
     RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
     RCC_OscInitStruct.PLL.PLLQ = 9;
-    RCC_OscInitStruct.PLL.PLLR = 7;
 
     HASSERT(HAL_RCC_OscConfig(&RCC_OscInitStruct) == HAL_OK);
 
@@ -319,6 +310,6 @@ extern int isatty(int fd) {
  */
 void hw_postinit(void)
 {
-    spiffs0.mount("/ffs");
+  // spiffs0.mount("/ffs");
 }
 }

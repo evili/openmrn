@@ -1,1 +1,1 @@
-../../../../boards/st-stm32f767zi-nucleo/memory_map.ld
+../../../../boards/st-stm32f746zg-nucleo/memory_map.ld

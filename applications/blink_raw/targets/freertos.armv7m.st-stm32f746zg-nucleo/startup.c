@@ -1,1 +1,1 @@
-../../../../boards/st-stm32f767zi-nucleo/startup.c
+../../../../boards/st-stm32f746zg-nucleo/startup.c

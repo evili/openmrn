@@ -1,1 +1,1 @@
-../../../../boards/st-stm32f767zi-nucleo/target.ld
+../../../../boards/st-stm32f746zg-nucleo/target.ld

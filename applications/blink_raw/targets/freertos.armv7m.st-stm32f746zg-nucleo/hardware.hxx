@@ -1,1 +1,1 @@
-../../../../boards/st-stm32f767zi-nucleo/hardware.hxx
+../../../../boards/st-stm32f746zg-nucleo/hardware.hxx

@@ -10,7 +10,7 @@ sh -c "if [ \"X`printenv OPENMRNPATH`\" != \"X\" ]; then printenv OPENMRNPATH; \
      else echo OPENMRNPATH not found; fi" \
 )
 
-# Find STM32CubeF3 libraries
+# Find STM32CubeF7 libraries
 include $(OPENMRNPATH)/etc/stm32cubef7.mk
 
 LDFLAGSEXTRA += 
@@ -35,7 +35,7 @@ include $(OPENMRNPATH)/etc/node_id.mk
 # How to use: make multibin ADDRESS=0x20 ADDRHIGH=0x45 NUM=3
 # starting address, high bits (user range), count
 multibin:
-	for i in $$(seq 1 $(NUM)) ; do $(MAKE) $(EXECUTABLE).bin ADDRESS=$$(printf 0x%02x $$(($(ADDRESS)+$$i))) ; cp $(EXECUTABLE).bin $(EXECUTABLE).f303.$$(printf %02x%02x $(ADDRHIGH) $$(($(ADDRESS)+$$i-1))).bin ; done
+	for i in $$(seq 1 $(NUM)) ; do $(MAKE) $(EXECUTABLE).bin ADDRESS=$$(printf 0x%02x $$(($(ADDRESS)+$$i))) ; cp $(EXECUTABLE).bin $(EXECUTABLE).f746.$$(printf %02x%02x $(ADDRHIGH) $$(($(ADDRESS)+$$i-1))).bin ; done
 
 ifeq ($(call find_missing_deps,OPENOCDPATH OPENOCDSCRIPTSPATH),)
 all: $(EXECUTABLE).bin

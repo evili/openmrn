@@ -45,7 +45,7 @@
 #elif defined(STM32F303xC) || defined(STM32F303xE)
 #include "stm32f3xx_hal_dma.h"
 #include "stm32f3xx_hal_uart.h"
-#elif defined(STM32F767xx)
+#elif defined(STM32F767xx) || defined(STM32F746xx)
 #include "stm32f7xx_hal_dma.h"
 #include "stm32f7xx_hal_uart.h"
 #else

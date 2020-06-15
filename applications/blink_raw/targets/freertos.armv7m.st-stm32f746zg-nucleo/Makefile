@@ -1,1 +1,1 @@
-../../../../boards/st-stm32f767zi-nucleo/Makefile
+../../../../boards/st-stm32f746zg-nucleo/Makefile
