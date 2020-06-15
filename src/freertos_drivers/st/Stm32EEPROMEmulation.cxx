@@ -44,7 +44,7 @@
 #include "stm32f0xx_hal_flash.h"
 #elif defined(STM32F303xC) || defined(STM32F303xE)
 #include "stm32f3xx_hal_flash.h"
-#elif defined(STM32F767xx)
+#elif defined(STM32F767xx) || defined(STM32F746xx)
 #define F7_FLASH
 #include "stm32f7xx_hal_flash.h"
 #else
@@ -64,6 +64,10 @@ const size_t EEPROMEmulation::BYTES_PER_BLOCK = 2;
 const size_t Stm32EEPROMEmulation::PAGE_SIZE = 0x800;
 const size_t EEPROMEmulation::BLOCK_SIZE = 4;
 const size_t EEPROMEmulation::BYTES_PER_BLOCK = 2;
+#elif defined(STM32F746xx) 0x8000
+const size_t Stm32EEPROMEmulation::PAGE_SIZE = 0x8000;
+const size_t EEPROMEmulation::BLOCK_SIZE = 8;
+const size_t EEPROMEmulation::BYTES_PER_BLOCK = 4;
 #elif defined(STM32F767xx)
 // Note this assumes single-bank usage
 const size_t Stm32EEPROMEmulation::PAGE_SIZE = 256*1024;
