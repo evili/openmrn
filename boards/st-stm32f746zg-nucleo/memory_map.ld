@@ -1,4 +1,3 @@
-// See STM Application Note 4826.
 MEMORY
 {
   BOOTLOADER (rx)  : ORIGIN = 0x08000000, LENGTH = 32K

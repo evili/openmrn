@@ -45,7 +45,7 @@
 #include "stm32f1xx_hal_conf.h"
 #elif defined(STM32F303xC) || defined(STM32F303xE)
 #include "stm32f3xx_hal_conf.h"
-#elif defined(STM32F767xx)
+#elif defined(STM32F767xx) || defined(STM32F746xx)
 #include "stm32f7xx_hal_conf.h"
 #else
 #error "STM32F_HAL_CONF unsupported STM32 device"
