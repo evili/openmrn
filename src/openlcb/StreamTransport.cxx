@@ -1,5 +1,5 @@
 /** \copyright
- * Copyright (c) 2015, Balazs Racz
+ * Copyright (c) 2022, Balazs Racz
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,26 +24,43 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * \file PacketFlowInterface.hxx
+ * \file StreamTransport.cxx
  *
- * Shared declarations for sending DCC packets.
+ * Interface for stream functionality attached to an OpenLCB interface.
  *
  * @author Balazs Racz
- * @date 16 May 2015
+ * @date 20 Dec 2022
  */
 
-#ifndef _DCC_PACKETFLOWINTERFACE_HXX_
-#define _DCC_PACKETFLOWINTERFACE_HXX_
+#include "openlcb/StreamTransport.hxx"
 
-#include "executor/StateFlow.hxx"
-#include "dcc/Packet.hxx"
+#include "openlcb/StreamSender.hxx"
 
-namespace dcc {
+namespace openlcb
+{
 
-/// Interface for flows and ports receiving a sequence of DCC (track) packets.
-typedef FlowInterface<Buffer<dcc::Packet>> PacketFlowInterface;
+StreamTransport::StreamTransport(If *iface)
+    : inUseSendStreamIds_(0)
+    , nextSendStreamId_(0)
+{
+    iface->set_stream_transport(this);
+}
 
-}  // namespace dcc
+StreamTransport::~StreamTransport()
+{
+}
 
+StreamTransportCan::StreamTransportCan(IfCan *iface, unsigned num_senders)
+    : StreamTransport(iface)
+{
+    for (unsigned i = 0; i < num_senders; ++i)
+    {
+        senders_.typed_insert(new StreamSenderCan(iface, iface));
+    }
+}
 
-#endif
+StreamTransportCan::~StreamTransportCan()
+{
+}
+
+} // namespace openlcb

@@ -38,6 +38,8 @@
 #include <string>
 #include <string.h>
 
+using std::string;
+
 /** Renders an integer to string, left-justified. @param buffer must be an at
  * @param buffer must be an at least 10 character long array.
  * @param value will be rendered into the buffer.
@@ -133,13 +135,14 @@ string string_to_hex(const string& arg);
 ///
 /// @param mac a 6-byte array storing the MAC address. mac[0] will be printed
 /// at the beginning.
-/// @param colons true to print colons, else false to exclude the colon
-/// seperators
+/// @param colons Specifies byte separators. Leave as default (':') to print
+/// colons, an alternate character to use as separator, or set to 0 to exclude
+/// the seperators entirely.
 ///
-/// @return a string containing a colon-separated hexadecimal printout of the
-/// given MAC address.
+/// @return a string containing a hexadecimal printout of the given MAC
+/// address.
 ///
-string mac_to_string(uint8_t mac[6], bool colons = true);
+string mac_to_string(uint8_t mac[6], char colon = ':');
 
 /// Formats an IPv4 address to string.
 ///
