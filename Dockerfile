@@ -38,7 +38,7 @@ RUN ln -siv . default
 ENV FREERTOSPATH /opt/FreeRTOS
 
 COPY docker_entrypoint.sh /
-RUN mkdir -pv /openmrn
+RUN useradd openmrn -m -d /openmrn
 WORKDIR /openmrn
 ENV OPENMRN_URL=${OPENMRN_URL}
 ENV OPENMRNPATH=/openmrn
@@ -47,5 +47,6 @@ VOLUME /opt/FreeRTOS
 VOLUME /opt/armgcc
 VOLUME ${FIRMWARE_PATH}
 ENV ${FIRMWARE_VAR}=${FIRMWARE_PATH}
+USER openmrn
 
 ENTRYPOINT ["/usr/bin/tini", "--",  "/docker_entrypoint.sh"]
