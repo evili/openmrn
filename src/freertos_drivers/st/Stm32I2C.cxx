@@ -60,7 +60,7 @@
 // the main clock, and gives 400 kHz clock (fast mode).
 #define I2C_TIMING (__LL_I2C_CONVERT_TIMINGS(9, 0x3, 0x3, 0x3, 0x9))
 
-#elif defined(STM32F767xx)
+#elif defined(STM32F746xx) || defined(STM32F767xx)
 #include "stm32f7xx_ll_rcc.h"
 #include "stm32f7xx_ll_i2c.h"
 

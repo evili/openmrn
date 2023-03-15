@@ -55,7 +55,7 @@ const size_t Stm32EEPROMEmulation::PAGE_SIZE = 0x800;
 const size_t EEPROMEmulation::BLOCK_SIZE = 8;
 const size_t EEPROMEmulation::BYTES_PER_BLOCK = 4;
 #define L4_FLASH
-#elif defined(STM32F767xx)
+#elif defined(STM32F746xx) || defined(STM32F767xx)
 // Note this assumes single-bank usage
 const size_t Stm32EEPROMEmulation::PAGE_SIZE = 256*1024;
 const size_t EEPROMEmulation::BLOCK_SIZE = 8;

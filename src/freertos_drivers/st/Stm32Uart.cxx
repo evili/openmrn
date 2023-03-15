@@ -44,7 +44,7 @@
 #include "stm32f3xx_hal_cortex.h"
 #elif defined(STM32L431xx) || defined(STM32L432xx)
 #include "stm32l4xx_hal_cortex.h"
-#elif defined(STM32F767xx)
+#elif defined(STM32F746xx) || defined(STM32F767xx)
 #include "stm32f7xx_hal_cortex.h"
 #else
 #error Dont know what STM32 chip you have.
@@ -72,7 +72,7 @@ Stm32Uart *Stm32Uart::instances[5] = {NULL};
 #define USART5 UART5
 #elif defined (STM32F030xC)
 Stm32Uart *Stm32Uart::instances[6] = {NULL};
-#elif defined (STM32F091xC) || defined (STM32F098xx) || defined(STM32F767xx)
+#elif defined (STM32F091xC) || defined (STM32F098xx) || defined(STM32F746xx) || defined(STM32F767xx)
 Stm32Uart *Stm32Uart::instances[8] = {NULL};
 #endif
 
@@ -326,7 +326,7 @@ void Stm32Uart::interrupt_handler(unsigned index)
 #if !defined(STM32F030x6) && !defined(STM32F031x6) && !defined(STM32F038xx) && \
     !defined(STM32F030x8) && !defined(STM32F042x6) && !defined(STM32F048xx) && \
     !defined(STM32F051x8) && !defined(STM32F058xx) && !defined(STM32F070x6) && \
-    !defined(STM32F767xx)
+    !defined(STM32F746xx) && !defined(STM32F767xx)
     if (index >= 2)
     {
         for (unsigned i = 2; i < (sizeof(instances)/sizeof(Stm32Uart*)); ++i)

@@ -79,7 +79,7 @@
 #define CAN_THIRD_IRQN CAN1_SCE_IRQn
 #define CAN_CLOCK (cm3_cpu_clock_hz)
 
-#elif defined (STM32F767xx)
+#elif defined (STM32F746xx) || defined (STM32F767xx)
 
 #include "stm32f7xx_hal_cortex.h"
 #define SPLIT_INT
@@ -492,7 +492,7 @@ void can1_sce_interrupt_handler(void)
     Stm32Can::instances[0]->sce_interrupt_handler();
 }
 
-#elif defined(STM32F767xx) || defined(STM32L431xx) || defined(STM32L432xx)
+#elif defined(STM32F746xx) || defined(STM32F767xx) || defined(STM32L431xx) || defined(STM32L432xx)
 
 void can1_tx_interrupt_handler(void)
 {

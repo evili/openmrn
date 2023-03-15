@@ -43,7 +43,7 @@
 #include "stm32f3xx_ll_rcc.h"
 #elif defined(STM32L432xx) || defined(STM32L431xx)
 #include "stm32l4xx_ll_rcc.h"
-#elif defined(STM32F767xx)
+#elif defined(STM32F746xx) || defined(STM32F767xx)
 #include "stm32f7xx_ll_rcc.h"
 #else
 #error Dont know what STM32 chip you have.

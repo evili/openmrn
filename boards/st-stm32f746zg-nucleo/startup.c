@@ -1,0 +1,1 @@
+../st-stm32f74x_75x-generic/startup.c
