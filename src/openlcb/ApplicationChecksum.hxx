@@ -35,7 +35,7 @@
 #ifndef _OPENLCB_APPLICATIONCHECKSUM_HXX_
 #define _OPENLCB_APPLICATIONCHECKSUM_HXX_
 
-#include "freertos/bootloader_hal.h"
+#include "openlcb/bootloader_hal.h"
 
 extern "C" {
 /** @returns true if the application checksum currently in flash is correct. */

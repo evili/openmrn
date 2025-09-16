@@ -57,9 +57,8 @@
 #ifndef _FREERTOS_DRIVERS_COMMON_RAILCOMIMPL_HXX_
 #define _FREERTOS_DRIVERS_COMMON_RAILCOMIMPL_HXX_
 
-#include "TivaDCC.hxx"  // for FixedQueue
-
 #include "freertos_drivers/common/RailcomDriver.hxx"
+#include "freertos_drivers/common/FixedQueue.hxx"
 #include "dcc/RailCom.hxx"
 
 /*
@@ -223,13 +222,12 @@ public:
         }
     }
 
-private:
+protected:
     void set_feedback_key(uint32_t key) OVERRIDE
     {
         feedbackKey_ = key;
     }
 
-protected:
     /** Takes a new empty packet at the front of the queue, fills in feedback
      * key and channel information.
      * @param channel is which channel to set the packet for.
@@ -237,12 +235,11 @@ protected:
      * nullptr.*/
     dcc::Feedback *alloc_new_packet(uint8_t channel)
     {
-        if (!feedbackQueue_.has_noncommit_space())
+        dcc::Feedback *entry = feedbackQueue_.noncommit_back_or_null();
+        if (!entry)
         {
             return nullptr;
         }
-        dcc::Feedback *entry = &feedbackQueue_.back();
-        feedbackQueue_.noncommit_back();
         entry->reset(feedbackKey_);
         entry->channel = channel;
         return entry;

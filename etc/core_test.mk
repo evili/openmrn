@@ -7,6 +7,8 @@
 
 ifneq ($(HOST_TARGET)$(EMU),0)
 
+include $(OPENMRNPATH)/etc/make_utils.mk
+
 FULLPATHCXXTESTSRCS := $(foreach DIR,$(SUBDIRS) tests,$(wildcard $(SRCDIR)/$(DIR)/*.cxxtest))
 
 TESTOBJSEXTRA += gtest-all.o gmock-all.o
@@ -22,7 +24,7 @@ TESTMD5 = $(TESTSRCS:.cxxtest=.testmd5)
 alltest-%: 
 	+$(MAKE) $(filter $(@:alltest-%=%)/%,$(TESTOUTPUTS))
 
-INCLUDES += -I$(GTESTPATH)/include -I$(GMOCKPATH)/include -I$(GMOCKPATH) \
+INCLUDES += -I$(GTESTPATH)/include -I$(GMOCKPATH)/include -I "$(GMOCKPATH)" \
             -I$(OPENMRNPATH)/src -I$(OPENMRNPATH)/include
 
 CFLAGS += $(INCLUDES)
@@ -33,8 +35,27 @@ CXXFLAGS += $(INCLUDES)
 ifdef LIBDIR
 # we are under prog.mk
 TESTLIBDEPS += $(foreach lib,$(SUBDIRS),lib/lib$(lib).a)
+
+# This ensures that link targets that depend on lib/libfoo.a will recurse into
+# the directory foo and rebuild stuff that's there. However, the dependency is
+# phrased in a way that if recursing does not change the library (when it's
+# up-to-date) then the .elf linking is not re-done.
+$(foreach lib,$(SUBDIRS),$(eval $(call SUBDIR_helper_template,$(lib))))
+
+# Ensures that when the core target is clean (missing lib/libfoo.a), make knows
+# how to build its libraries. This also ensures that the text.executable files
+# are remade when something changes in the openmrn codebase.
+$(foreach lib,$(CORELIBS),$(LIBDIR)/lib$(lib).a): $(LIBDIR)/timestamp
+
 else
 LIBDIR = lib
+
+# This ensures that link targets that depend on lib/libfoo.a will recurse into
+# the directory foo and rebuild stuff that's there. However, the dependency is
+# phrased in a way that if recursing does not change the library (when it's
+# up-to-date) then the .elf linking is not re-done.
+$(foreach lib,$(CORELIBS),$(eval $(call SUBDIR_helper_template,$(lib))))
+
 endif
 TESTLIBDEPS += $(foreach lib,$(CORELIBS),$(LIBDIR)/lib$(lib).a)
 
@@ -42,7 +63,7 @@ LDFLAGS      += -L$(LIBDIR)
 
 $(LIBDIR)/timestamp: $(BUILDDIRS)
 
-$(info test deps $(TESTOBJSEXTRA) $(LIBDIR)/timestamp )
+
 $(TESTBINS): %.test$(EXTENTION) : %.test.o $(TESTOBJSEXTRA) $(LIBDIR)/timestamp lib/timestamp $(TESTLIBDEPS) $(TESTEXTRADEPS) | $(BUILDDIRS)
 	$(LD) -o $@ $(LDFLAGS) -los  $< $(TESTOBJSEXTRA) $(LIBS) $(STARTGROUP) $(LINKCORELIBS) $(ENDGROUP) $(SYSLIBRARIES) 
 
@@ -53,10 +74,10 @@ $(TESTOBJS): %.test.o : $(SRCDIR)/%.cxxtest
 	$(CXX) $(CXXFLAGS) -MMD -MF $*.dtest -MT $@ -x c++ $< -o $@
 
 gtest-all.o : %.o : $(GTESTSRCPATH)/src/%.cc
-	$(CXX) $(CXXFLAGS) -Wno-uninitialized -I$(GTESTPATH) -I$(GTESTSRCPATH) -MMD -MF $*.d   $< -o $@
+	$(CXX) $(CXXFLAGS) -Wno-uninitialized -Wno-maybe-uninitialized -I "$(GTESTPATH)" -I "$(GTESTSRCPATH)" -MMD -MF $*.d   $< -o $@
 
 gmock-all.o : %.o : $(GMOCKSRCPATH)/src/%.cc
-	$(CXX) $(CXXFLAGS) -I$(GMOCKPATH) -I$(GMOCKSRCPATH) -MMD -MF $*.d  $< -o $@
+	$(CXX) $(CXXFLAGS) -I "$(GMOCKPATH)" -I "$(GMOCKSRCPATH)" -MMD -MF $*.d  $< -o $@
 
 # This target takes the test binary output and compares the md5sum against the
 # md5sum of the previous run. If the md5sum of the test binary didn't change,
@@ -76,9 +97,26 @@ ifndef CUSTOM_EXEC
 
 endif
 
+ifeq ($(call find_missing_deps,GMOCKPATH GMOCKSRCPATH GTESTPATH GTESTSRCPATH),)
+
 run-tests: $(TESTOUTPUTS) $(TESTMD5)
 
+run-tests-single:
+	$(MAKE) $(TESTMD5)
+	$(MAKE) -j1 $(TESTOUTPUTS)
+
 tests: run-tests
+
+tests-single: run-tests-single
+
+else
+
+tests tests-single:
+	@echo Makefile: Can not run tests because of missing dependency $(call find_missing_deps,GMOCKPATH GMOCKSRCPATH GTESTPATH GTESTSRCPATH).
+	@exit 1
+
+endif
+
 
 clean-gtest:
 	rm -f {gtest-all,gmock-all}.{d,o,gcno}
